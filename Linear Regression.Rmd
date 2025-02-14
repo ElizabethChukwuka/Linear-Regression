@@ -1,0 +1,184 @@
+```{r}
+options(repos = c(CRAN = "https://cloud.r-project.org/"))
+
+```
+
+The aim of this project is to fit a model that predicts median house value from the other variables in the data set
+
+Load the data and check the overall structure of the data
+```{r}
+data= read.csv("train.csv")
+str(data)
+``` 
+This shows that all the variables were properly loaded into r, with data types integers and numerals. 
+
+```{r}
+summary(data)
+
+```
+```{r}
+ggplot(data, aes(x = medianHouseValue)) + geom_histogram(binwidth = 50000, fill = "rosybrown", color = "black")
+
+```
+
+```{r}
+ggplot(data, aes(x = housingMedianAge)) + geom_histogram(binwidth = 10, fill = "indianred4", color = "black")
+```
+
+```{r}
+ggplot(data, aes(x = totalRooms)) + geom_histogram(binwidth = 1000, fill = "rosybrown4", color = "black")
+
+```
+
+```{r}
+ggplot(data, aes(x = totalBedrooms)) + geom_histogram(binwidth = 200, fill = "maroon", color = "black")
+
+```
+```{r}
+ggplot(data, aes(x = population)) + geom_histogram(binwidth = 500, fill = "brown4", color = "black")
+
+```
+
+```{r}
+ggplot(data, aes(x = households)) + geom_histogram(binwidth = 500, fill = "darkolivegreen", color = "black")
+
+```
+
+```{r}
+ggplot(data, aes(x = medianIncome)) + geom_histogram(binwidth = 1, fill = "darkseagreen4", color = "black")
+
+```
+
+```{r}
+colors()
+```
+
+
+```{r}
+
+install.packages("reshape2")
+```
+
+```{r}
+library(reshape2)
+
+data_scaled = as.data.frame(scale(data))
+
+
+data_melted = melt(data_scaled)
+
+
+ggplot(data_melted, aes(x = variable, y = value)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Box Plots for Scaled Variables", x = "Variables", y = "Scaled Values")
+
+
+``` 
+Variables, such as totalRooms and population, have noticeable outliers
+The spread of the data varies across different variables. For example, medianIncome has a relatively narrow IQR compared to totalRooms
+
+
+```{r}
+library(maps)
+library(mapdata)
+map("state", region="california")
+points(data$longitude, data$latitude
+,col="blue", pch=16, cex=0.3)
+```
+
+
+
+
+```{r}
+library(ggplot2)
+# Example: Plotting house prices on a map with custom colors and smaller dots
+ggplot(data, aes(x = longitude, y = latitude, color = medianHouseValue)) +
+  geom_point(size = 1) +  # Adjust the size of the dots
+  scale_color_gradient(low = "darkblue", high = "pink") +  # Change the color gradient
+  labs(title = "House Prices by Location", x = "Longitude", y = "Latitude")
+
+```
+
+
+
+```{r}
+
+install.packages("geosphere")
+library(geosphere)
+```
+
+For the aspect of data explanation, we will scale the features to ensure that varying scales and metrics for the variables do not skew the interpretation of the model. 
+```{r}
+target="medianHouseValue"
+features=setdiff(names(data), target)
+
+```
+
+```{r}
+
+data=log1p(data+1)
+centroid= colMeans(data[, c("longitude", "latitude")])
+data$distance= distGeo(matrix(c(data$longitude,data$latitude), ncol=2), centroid)
+
+
+
+data[features]= scale(data[features])
+data$distance= scale(data$distance)
+
+
+```
+Created pairwise distances
+
+```{r}
+cor(data)
+```
+
+
+```{r}
+model=lm(as.formula(paste(target, "~.")), data=data)
+summary(model)
+```
+
+```{r}
+test=read.csv("test.csv")
+test_target="medianHouseValue"
+test_features=setdiff(names(test), test_target)
+
+centroid= colMeans(test[, c("longitude", "latitude")])
+
+test$distance= distGeo(matrix(c(test$longitude,test$latitude), ncol=2), centroid)
+test[[test_target]] <- log1p(test[[test_target]])
+test[test_features]=scale(test[test_features])
+test$distance= scale(test$distance)
+
+
+predictions= predict(model, test)
+
+```
+
+```{r}
+test[[test_target]]=expm1(test[[test_target]])
+predictions= expm1(predictions)
+
+```
+
+```{r}
+comparison=data.frame(Actual=test$medianHouseValue, predicted= predictions)
+mae=mean(abs(comparison$Actual-comparison$predicted))
+mae
+
+```
+
+
+
+```{r}
+library(ggplot2)
+ggplot(test, aes_string(x=comparison$Actual,y=comparison$predicted)) +
+  geom_point() +
+  geom_abline(intercept=0, slope=1, color = 'red') +
+  labs(title="Actual vs Predicted", x="Actual Values", y="Predicted Values") + theme_minimal()
+ 
+```
+
+Tree-Based Models: Consider using models like Random Forest or Gradient Boosting, which can handle weak correlations better.
